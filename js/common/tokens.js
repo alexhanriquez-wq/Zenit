@@ -27,7 +27,7 @@ function aleatorio(n) {
   return out.join("");
 }
 
-// Código legible de la entrada, p. ej. ZEN-8F29-KX71. Sirve para buscar y
+// Código legible de la entrada, p. ej. SAEN-8F29-KX71. Sirve para buscar y
 // para leer en voz alta; NO es el secreto (el secreto es el token).
 export function generarCodigo() {
   return `${APP.prefijoCodigo}-${aleatorio(4)}-${aleatorio(4)}`;

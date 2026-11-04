@@ -1,4 +1,6 @@
-# Zenit — Entradas digitales con QR
+# S.A.E.N — Sociedad Anónima Eventos Nocturnos
+
+Entradas digitales con QR.
 
 Plataforma web estática para vender entradas con QR único, controlar el cupo compartido entre vendedores y registrar el ingreso en la puerta.
 
@@ -59,7 +61,7 @@ js/ticket/        entrada.js
 ### `entradas/{token}`
 El **id del documento es el token secreto del QR** (40 caracteres hex = 160 bits aleatorios).
 
-`token, codigo (ZEN-8F29-KX71), eventoId, eventoNombre, eventoFecha, compradorNombre, compradorDni, vendedorId, vendedorNombre, vendedorCodigo, precio, estado, ingresada, fechaCreacion, venceEn, fechaVenta, fechaIngreso, controladorId, controladorNombre` (+ campos de anulación/liberación cuando corresponda).
+`token, codigo (SAEN-8F29-KX71), eventoId, eventoNombre, eventoFecha, compradorNombre, compradorDni, vendedorId, vendedorNombre, vendedorCodigo, precio, estado, ingresada, fechaCreacion, venceEn, fechaVenta, fechaIngreso, controladorId, controladorNombre` (+ campos de anulación/liberación cuando corresponda).
 
 Estados: `reservada → vendida → utilizada`, y además `anulada`, `vencida`, `cancelada`.
 
@@ -221,9 +223,18 @@ y abrí <http://localhost:8080>. `localhost` ya está autorizado en Firebase y p
 
 ---
 
+## 7 bis. App instalable (PWA)
+
+- `manifest.webmanifest` define nombre, ícono y colores; `sw.js` es el service worker; `js/common/pwa.js` lo registra y muestra el botón **Instalar app**.
+- **Android (Chrome):** botón "📲 Instalar app" en el inicio (o "Instalar app" en la barra de cada panel), o menú ⋮ → *Instalar aplicación*.
+- **iPhone (Safari):** Compartir → *Agregar a inicio* (el inicio muestra estas instrucciones).
+- **PC (Chrome/Edge):** ícono de instalar en la barra de direcciones.
+- El service worker usa **red primero** para los archivos de la app (siempre se carga la versión nueva si hay internet) y **nunca intercepta Firestore ni Authentication**: ventas y validaciones siempre van al servidor. Sin conexión, la app abre y las entradas ya abiertas se pueden volver a mostrar, pero no se puede vender ni validar.
+- Requiere HTTPS (GitHub Pages lo tiene) o `localhost`.
+
 ## 8. Datos de demostración
 
-**Este proyecto no incluye datos simulados.** Si `config.js` no está completo, todas las páginas muestran "Firebase no está configurado" en lugar de datos falsos. Para practicar, se recomienda crear **un proyecto Firebase separado** (por ejemplo `zenit-pruebas`) y usar ese `config.js` mientras se prueba, para no mezclar datos de prueba con datos reales.
+**Este proyecto no incluye datos simulados.** Si `config.js` no está completo, todas las páginas muestran "Firebase no está configurado" en lugar de datos falsos. Para practicar, se recomienda crear **un proyecto Firebase separado** (por ejemplo `saen-pruebas`) y usar ese `config.js` mientras se prueba, para no mezclar datos de prueba con datos reales.
 
 ---
 

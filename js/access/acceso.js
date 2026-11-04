@@ -7,7 +7,7 @@ import { validarIngreso } from "../services/entradas.js";
 import { Escaner, senal } from "./scanner.js";
 
 const { perfil } = await requerirRol(["acceso"]);
-const CLAVE_EVENTO = "zenit.acceso.evento";
+const CLAVE_EVENTO = "saen.acceso.evento";
 
 let eventos = [];
 let eventoSel = null;

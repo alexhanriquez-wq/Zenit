@@ -21,9 +21,9 @@ export const firebaseConfig = {
 
 // Ajustes de la aplicación (solo presentación / comportamiento del cliente).
 export const APP = {
-  nombre: "Zenit",
+  nombre: "S.A.E.N",
   // Prefijo del código visible de la entrada (2 a 5 letras mayúsculas).
-  prefijoCodigo: "ZEN",
+  prefijoCodigo: "SAEN",
   // Moneda para mostrar precios.
   moneda: "ARS",
   locale: "es-AR",
