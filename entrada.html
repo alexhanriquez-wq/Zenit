@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0a10">
+  <meta name="robots" content="noindex">
+  <meta name="referrer" content="no-referrer">
+  <title>Entrada digital · Zenit</title>
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/entrada.css">
+  <script src="assets/vendor/qrcode.min.js" defer></script>
+</head>
+<body>
+  <main class="container" style="padding-top:24px">
+    <div id="ticket-cont"></div>
+    <div id="error" class="card narrow hidden" style="margin:40px auto;text-align:center">
+      <h2>Enlace de entrada inválido</h2>
+      <p class="muted">Pedile a tu vendedor que te reenvíe la entrada.</p>
+    </div>
+    <p class="small muted" style="text-align:center;margin-top:18px;max-width:400px;margin-inline:auto">
+      Subí el brillo de la pantalla al mostrar el QR. La validez se verifica en la puerta.
+    </p>
+  </main>
+  <script type="module" src="js/ticket/entrada.js"></script>
+</body>
+</html>

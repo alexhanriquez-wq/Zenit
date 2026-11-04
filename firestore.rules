@@ -1,0 +1,321 @@
+rules_version = '2';
+
+// =====================================================================
+//  Reglas de seguridad — Sistema de entradas con QR (plan Spark)
+// ---------------------------------------------------------------------
+//  Principios:
+//   * Todo lo que no está permitido explícitamente está denegado.
+//   * El rol se lee de /usuarios/{uid}, documento que el usuario NO
+//     puede modificar (solo un administrador).
+//   * Cada movimiento de stock exige que la entrada y el evento cambien
+//     JUNTOS en la misma transacción (getAfter/existsAfter). No se puede
+//     crear una entrada sin sumar 1 a "reservadas", ni sumar sin crear.
+//   * Los valores sensibles (precio, nombre del vendedor, fechas) se
+//     comparan contra datos del servidor, no contra lo que envía el
+//     navegador.
+// =====================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------------- Utilidades ----------------
+    function autenticado() { return request.auth != null; }
+    function rutaUsuario(uid) { return /databases/$(database)/documents/usuarios/$(uid); }
+    function rutaEvento(id)   { return /databases/$(database)/documents/eventos/$(id); }
+    function rutaEntrada(id)  { return /databases/$(database)/documents/entradas/$(id); }
+    function rutaIngreso(id)  { return /databases/$(database)/documents/ingresos/$(id); }
+
+    function perfil() { return get(rutaUsuario(request.auth.uid)).data; }
+    function habilitado() {
+      return autenticado()
+        && exists(rutaUsuario(request.auth.uid))
+        && perfil().activo == true
+        && perfil().estado == 'aprobado';
+    }
+    function esRol(r)     { return habilitado() && perfil().rol == r; }
+    function esAdmin()    { return esRol('admin'); }
+    function esVendedor() { return esRol('vendedor'); }
+    function esAcceso()   { return esRol('acceso'); }
+
+    function cambiaSolo(campos) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(campos);
+    }
+    function textoValido(v, min, max) { return v is string && v.size() >= min && v.size() <= max; }
+
+    // =================================================================
+    //  USUARIOS
+    // =================================================================
+    function camposUsuario() {
+      return ['nombre', 'email', 'rol', 'estado', 'activo', 'codigo', 'fechaRegistro'];
+    }
+    function usuarioValido(d) {
+      return d.keys().hasOnly(camposUsuario())
+        && d.keys().hasAll(camposUsuario())
+        && textoValido(d.nombre, 3, 80)
+        && d.email is string
+        && d.rol in ['admin', 'vendedor', 'acceso']
+        && d.estado in ['pendiente', 'aprobado', 'rechazado']
+        && d.activo is bool
+        && (d.codigo == null || textoValido(d.codigo, 2, 20));
+    }
+
+    match /usuarios/{uid} {
+      allow get:  if autenticado() && (request.auth.uid == uid || esAdmin());
+      allow list: if esAdmin();
+
+      // Auto-registro: solo como vendedor PENDIENTE, inactivo y sin código.
+      allow create: if autenticado()
+        && request.auth.uid == uid
+        && usuarioValido(request.resource.data)
+        && request.resource.data.rol == 'vendedor'
+        && request.resource.data.estado == 'pendiente'
+        && request.resource.data.activo == false
+        && request.resource.data.codigo == null
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.fechaRegistro == request.time;
+
+      // Alta directa por un administrador (vendedores o personal de acceso).
+      allow create: if esAdmin() && usuarioValido(request.resource.data);
+
+      // Solo el administrador cambia rol, estado, activo o código.
+      allow update: if esAdmin()
+        && usuarioValido(request.resource.data)
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.fechaRegistro == resource.data.fechaRegistro;
+
+      allow delete: if false;
+    }
+
+    // =================================================================
+    //  EVENTOS
+    // =================================================================
+    function eventoValido(d) {
+      return d.keys().hasOnly(['nombre', 'fecha', 'precio', 'limite', 'vendidas',
+                               'reservadas', 'estado', 'ultimaEntrada',
+                               'creadoEn', 'actualizadoEn'])
+        && textoValido(d.nombre, 2, 80)
+        && d.fecha is timestamp
+        && d.precio is number && d.precio >= 0
+        && d.limite is int && d.limite > 0 && d.limite <= 10000
+        && d.vendidas is int && d.vendidas >= 0
+        && d.reservadas is int && d.reservadas >= 0
+        && d.vendidas + d.reservadas <= d.limite
+        && d.estado in ['activo', 'pausado', 'finalizado'];
+    }
+
+    // Movimiento de stock hecho por un vendedor. "ultimaEntrada" indica
+    // qué entrada justifica el cambio; esa entrada debe cambiar en la
+    // misma operación atómica y pertenecer al vendedor.
+    function movimientoVendedor(eventoId) {
+      let antes = resource.data;
+      let despues = request.resource.data;
+      let id = despues.ultimaEntrada;
+      return cambiaSolo(['reservadas', 'vendidas', 'ultimaEntrada'])
+        && id is string
+        && existsAfter(rutaEntrada(id))
+        && getAfter(rutaEntrada(id)).data.eventoId == eventoId
+        && getAfter(rutaEntrada(id)).data.vendedorId == request.auth.uid
+        && (
+          // 1) Nueva reserva
+          ( !exists(rutaEntrada(id))
+            && antes.estado == 'activo'
+            && getAfter(rutaEntrada(id)).data.estado == 'reservada'
+            && despues.reservadas == antes.reservadas + 1
+            && despues.vendidas == antes.vendidas
+            && despues.vendidas + despues.reservadas <= antes.limite )
+          ||
+          // 2) Confirmación de cobro: reservada -> vendida
+          ( exists(rutaEntrada(id))
+            && get(rutaEntrada(id)).data.estado == 'reservada'
+            && getAfter(rutaEntrada(id)).data.estado == 'vendida'
+            && despues.reservadas == antes.reservadas - 1
+            && despues.vendidas == antes.vendidas + 1 )
+          ||
+          // 3) Liberación de reserva propia (cancelada o vencida)
+          ( exists(rutaEntrada(id))
+            && get(rutaEntrada(id)).data.estado == 'reservada'
+            && getAfter(rutaEntrada(id)).data.estado in ['vencida', 'cancelada']
+            && despues.reservadas == antes.reservadas - 1
+            && despues.vendidas == antes.vendidas )
+        );
+    }
+
+    match /eventos/{eventoId} {
+      allow read: if habilitado();
+
+      allow create: if esAdmin()
+        && eventoValido(request.resource.data)
+        && request.resource.data.vendidas == 0
+        && request.resource.data.reservadas == 0;
+
+      allow update: if (esAdmin() && eventoValido(request.resource.data))
+                    || (esVendedor() && movimientoVendedor(eventoId));
+
+      allow delete: if esAdmin()
+        && resource.data.vendidas == 0
+        && resource.data.reservadas == 0;
+    }
+
+    // =================================================================
+    //  ENTRADAS  (id del documento = token secreto del QR)
+    // =================================================================
+    function camposEntradaNueva() {
+      return ['token', 'codigo', 'eventoId', 'eventoNombre', 'eventoFecha',
+              'compradorNombre', 'compradorDni',
+              'vendedorId', 'vendedorNombre', 'vendedorCodigo',
+              'precio', 'estado', 'ingresada',
+              'fechaCreacion', 'venceEn', 'fechaVenta',
+              'fechaIngreso', 'controladorId', 'controladorNombre'];
+    }
+
+    function nuevaEntradaValida(entradaId) {
+      let d = request.resource.data;
+      let ev = get(rutaEvento(d.eventoId)).data;
+      let evDespues = getAfter(rutaEvento(d.eventoId)).data;
+      let yo = perfil();
+      return entradaId.matches('^[a-f0-9]{40}$')
+        && d.keys().hasOnly(camposEntradaNueva())
+        && d.keys().hasAll(camposEntradaNueva())
+        && d.token == entradaId
+        && d.codigo is string && d.codigo.matches('^[A-Z]{2,5}-[A-Z0-9]{4}-[A-Z0-9]{4}$')
+        && ev.estado == 'activo'
+        && d.eventoNombre == ev.nombre
+        && d.eventoFecha == ev.fecha
+        && d.precio == ev.precio
+        && d.vendedorId == request.auth.uid
+        && d.vendedorNombre == yo.nombre
+        && d.vendedorCodigo == yo.codigo
+        && textoValido(d.compradorNombre, 3, 80)
+        && d.compradorDni is string && d.compradorDni.matches('^[0-9]{6,10}$')
+        && d.estado == 'reservada'
+        && d.ingresada == false
+        && d.fechaCreacion == request.time
+        && d.venceEn is timestamp
+        && d.venceEn > request.time
+        && d.venceEn <= request.time + duration.value(2, 'h')
+        && d.fechaVenta == null
+        && d.fechaIngreso == null
+        && d.controladorId == null
+        && d.controladorNombre == null
+        // El evento debe sumar exactamente 1 reserva en la misma operación
+        && evDespues.reservadas == ev.reservadas + 1
+        && evDespues.vendidas == ev.vendidas
+        && evDespues.ultimaEntrada == entradaId;
+    }
+
+    function confirmarCobro(entradaId) {
+      let d = request.resource.data;
+      let ev = get(rutaEvento(resource.data.eventoId)).data;
+      let evDespues = getAfter(rutaEvento(resource.data.eventoId)).data;
+      return resource.data.estado == 'reservada'
+        && request.time <= resource.data.venceEn
+        && cambiaSolo(['estado', 'fechaVenta'])
+        && d.estado == 'vendida'
+        && d.fechaVenta == request.time
+        && evDespues.reservadas == ev.reservadas - 1
+        && evDespues.vendidas == ev.vendidas + 1
+        && evDespues.ultimaEntrada == entradaId;
+    }
+
+    function liberarReserva(entradaId) {
+      let d = request.resource.data;
+      let ev = get(rutaEvento(resource.data.eventoId)).data;
+      let evDespues = getAfter(rutaEvento(resource.data.eventoId)).data;
+      return resource.data.estado == 'reservada'
+        && cambiaSolo(['estado', 'fechaLiberacion', 'liberadaPor'])
+        && ( d.estado == 'cancelada'
+             || (d.estado == 'vencida' && request.time > resource.data.venceEn) )
+        && d.fechaLiberacion == request.time
+        && d.liberadaPor == request.auth.uid
+        && evDespues.reservadas == ev.reservadas - 1
+        && evDespues.vendidas == ev.vendidas
+        && evDespues.ultimaEntrada == entradaId;
+    }
+
+    function anularEntrada(entradaId) {
+      let d = request.resource.data;
+      let previo = resource.data.estado;
+      let ev = get(rutaEvento(resource.data.eventoId)).data;
+      let evDespues = getAfter(rutaEvento(resource.data.eventoId)).data;
+      return previo in ['reservada', 'vendida']
+        && cambiaSolo(['estado', 'fechaAnulacion', 'anuladaPor', 'motivoAnulacion'])
+        && d.estado == 'anulada'
+        && d.fechaAnulacion == request.time
+        && d.anuladaPor == request.auth.uid
+        && textoValido(d.motivoAnulacion, 0, 200)
+        && evDespues.ultimaEntrada == entradaId
+        && ( (previo == 'reservada'
+               && evDespues.reservadas == ev.reservadas - 1
+               && evDespues.vendidas == ev.vendidas)
+          || (previo == 'vendida'
+               && evDespues.vendidas == ev.vendidas - 1
+               && evDespues.reservadas == ev.reservadas) );
+    }
+
+    // vendida -> utilizada. Exige crear /ingresos/{id} en la misma
+    // transacción; como ese documento solo puede crearse una vez, una
+    // entrada nunca puede registrar dos ingresos.
+    function registrarIngreso(entradaId) {
+      let d = request.resource.data;
+      return resource.data.estado == 'vendida'
+        && resource.data.ingresada == false
+        && cambiaSolo(['estado', 'ingresada', 'fechaIngreso', 'controladorId', 'controladorNombre'])
+        && d.estado == 'utilizada'
+        && d.ingresada == true
+        && d.fechaIngreso == request.time
+        && d.controladorId == request.auth.uid
+        && d.controladorNombre == perfil().nombre
+        && !exists(rutaIngreso(entradaId))
+        && existsAfter(rutaIngreso(entradaId));
+    }
+
+    match /entradas/{entradaId} {
+      // El personal de acceso solo puede leer por token (get), nunca listar.
+      allow get: if esAdmin()
+                 || esAcceso()
+                 || (esVendedor() && resource.data.vendedorId == request.auth.uid);
+
+      // El vendedor solo puede listar consultas filtradas por su propio uid.
+      allow list: if esAdmin()
+                  || (esVendedor() && resource.data.vendedorId == request.auth.uid);
+
+      allow create: if esVendedor() && nuevaEntradaValida(entradaId);
+
+      allow update: if
+           (esVendedor()
+              && resource.data.vendedorId == request.auth.uid
+              && (confirmarCobro(entradaId) || liberarReserva(entradaId)))
+        || (esAdmin() && (liberarReserva(entradaId) || anularEntrada(entradaId)))
+        || (esAcceso() && registrarIngreso(entradaId));
+
+      allow delete: if false;
+    }
+
+    // =================================================================
+    //  INGRESOS  (id del documento = id de la entrada; inmutables)
+    // =================================================================
+    match /ingresos/{entradaId} {
+      allow read: if esAdmin()
+                  || (esAcceso() && resource.data.controladorId == request.auth.uid);
+
+      allow create: if esAcceso()
+        && request.resource.data.keys().hasOnly(['entradaId', 'eventoId', 'codigo',
+              'compradorNombre', 'compradorDni', 'vendedorId', 'vendedorNombre',
+              'controladorId', 'controladorNombre', 'fechaHora'])
+        && request.resource.data.entradaId == entradaId
+        && request.resource.data.controladorId == request.auth.uid
+        && request.resource.data.controladorNombre == perfil().nombre
+        && request.resource.data.fechaHora == request.time
+        && get(rutaEntrada(entradaId)).data.estado == 'vendida'
+        && getAfter(rutaEntrada(entradaId)).data.estado == 'utilizada'
+        && request.resource.data.eventoId == get(rutaEntrada(entradaId)).data.eventoId
+        && request.resource.data.codigo == get(rutaEntrada(entradaId)).data.codigo
+        && request.resource.data.compradorNombre == get(rutaEntrada(entradaId)).data.compradorNombre
+        && request.resource.data.compradorDni == get(rutaEntrada(entradaId)).data.compradorDni
+        && request.resource.data.vendedorId == get(rutaEntrada(entradaId)).data.vendedorId
+        && request.resource.data.vendedorNombre == get(rutaEntrada(entradaId)).data.vendedorNombre;
+
+      allow update, delete: if false;
+    }
+  }
+}

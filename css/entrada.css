@@ -1,0 +1,20 @@
+/* Vista de la entrada digital (entrada.html y diálogo del vendedor) */
+.ticket {
+  max-width: 400px; margin: 0 auto; text-align: center;
+  background: linear-gradient(180deg, #17161f, #0f0e15);
+  border: 1px solid var(--line); border-radius: 22px; padding: 22px 20px;
+  box-shadow: var(--shadow); position: relative; overflow: hidden;
+}
+.ticket::before { content: ""; position: absolute; inset: 0 0 auto; height: 6px; background: var(--accent); }
+.ticket .marca { color: var(--accent); font-weight: 800; letter-spacing: .14em; font-size: .85rem; }
+.ticket .tit { font-size: 1.3rem; font-weight: 800; margin: 2px 0 14px; }
+.ticket canvas.qr {
+  width: 100%; max-width: 300px; height: auto; image-rendering: pixelated;
+  background: #fff; border-radius: 14px; padding: 6px;
+}
+.ticket .codigo { font-family: var(--mono); font-size: 1.45rem; font-weight: 800; margin: 12px 0 10px; letter-spacing: .04em; }
+.ticket dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; text-align: left; margin: 0; font-size: .95rem; }
+.ticket dt { color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; align-self: center; }
+.ticket dd { margin: 0; font-weight: 600; word-break: break-word; }
+.ticket .nota { color: var(--muted); font-size: .8rem; margin-top: 14px; }
+.ticket-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; max-width: 400px; margin: 14px auto 0; }

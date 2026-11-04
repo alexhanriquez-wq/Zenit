@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0a10">
+  <title>Panel de vendedor · Zenit</title>
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/entrada.css">
+  <script src="assets/vendor/qrcode.min.js" defer></script>
+</head>
+<body class="cargando">
+  <div class="loader">Cargando…</div>
+
+  <header class="topbar">
+    <span class="brand">ZENIT<small>Vendedor</small></span>
+    <span class="spacer"></span>
+    <span class="user-chip" id="user-chip"></span>
+    <button class="btn btn-sm btn-ghost" id="btn-salir">Salir</button>
+  </header>
+
+  <main class="container">
+    <div class="stats" id="mis-stats"></div>
+
+    <div class="grid grid-2">
+      <!-- Venta -->
+      <section class="card">
+        <h2>Nueva venta</h2>
+        <form id="form-venta" novalidate>
+          <div class="field">
+            <label for="evento">Evento</label>
+            <select id="evento" required></select>
+            <div class="small muted" id="evento-info" style="margin-top:6px"></div>
+          </div>
+          <div class="field">
+            <label for="comprador">Nombre del comprador</label>
+            <input id="comprador" autocomplete="off" minlength="3" maxlength="80" required>
+          </div>
+          <div class="field">
+            <label for="dni">DNI del comprador</label>
+            <input id="dni" inputmode="numeric" pattern="[0-9]*" maxlength="10" autocomplete="off" required>
+          </div>
+          <div class="field">
+            <label for="precio">Precio de la entrada</label>
+            <input id="precio" readonly>
+          </div>
+          <button class="btn btn-primary btn-block" type="submit" id="btn-vender">Reservar entrada</button>
+          <p class="small muted" style="margin-top:10px">
+            La entrada queda <strong>reservada</strong> hasta que confirmes que recibiste el dinero.
+            Las reservas sin confirmar vencen solas y liberan el cupo.
+          </p>
+        </form>
+      </section>
+
+      <!-- Eventos -->
+      <section class="card">
+        <h2>Eventos disponibles</h2>
+        <div id="lista-eventos" class="stack"></div>
+      </section>
+    </div>
+
+    <section class="card" style="margin-top:16px">
+      <div class="row" style="margin-bottom:12px">
+        <h2 class="grow" style="margin:0">Mis ventas</h2>
+        <input id="buscar" class="grow" placeholder="Buscar por nombre, DNI o código">
+        <select id="filtro-estado" style="max-width:180px">
+          <option value="">Todos los estados</option>
+          <option value="reservada">Reservadas</option>
+          <option value="vendida">Vendidas</option>
+          <option value="utilizada">Utilizadas</option>
+          <option value="anulada">Anuladas</option>
+          <option value="vencida">Vencidas</option>
+          <option value="cancelada">Canceladas</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Comprador</th><th class="hide-sm">DNI</th><th class="hide-sm">Evento</th>
+            <th>Código</th><th>Estado</th><th class="hide-sm">Fecha</th><th></th>
+          </tr></thead>
+          <tbody id="tabla-ventas"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- Reserva pendiente de cobro -->
+  <dialog id="dlg-cobro">
+    <h2>Entrada reservada</h2>
+    <div id="cobro-detalle" class="stack"></div>
+    <div class="alert alert-warn" style="margin-top:12px">
+      Confirmá solo cuando hayas recibido el dinero. Vence en <strong id="cobro-reloj">—</strong>.
+    </div>
+    <div class="row end">
+      <button class="btn btn-bad" id="btn-cancelar-reserva">Cancelar reserva</button>
+      <button class="btn btn-ok" id="btn-confirmar-cobro">Recibí el dinero</button>
+    </div>
+  </dialog>
+
+  <!-- Entrada lista -->
+  <dialog id="dlg-ticket">
+    <div id="ticket-cont"></div>
+    <div class="row end"><button class="btn btn-ghost" id="btn-cerrar-ticket">Cerrar</button></div>
+  </dialog>
+
+  <script type="module" src="js/seller/vendedor.js"></script>
+</body>
+</html>

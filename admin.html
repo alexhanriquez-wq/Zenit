@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0a10">
+  <title>Administración · Zenit</title>
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/entrada.css">
+  <script src="assets/vendor/qrcode.min.js" defer></script>
+</head>
+<body class="cargando">
+  <div class="loader">Cargando…</div>
+
+  <header class="topbar">
+    <span class="brand">ZENIT<small>Administración</small></span>
+    <span class="spacer"></span>
+    <span class="user-chip" id="user-chip"></span>
+    <button class="btn btn-sm btn-ghost" id="btn-salir">Salir</button>
+  </header>
+
+  <main class="container">
+    <div class="row" style="margin-bottom:14px">
+      <label for="sel-evento" style="margin:0">Evento</label>
+      <select id="sel-evento" class="grow" style="max-width:420px"></select>
+    </div>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="resumen">Resumen</button>
+      <button class="tab" data-tab="entradas">Entradas</button>
+      <button class="tab" data-tab="vendedores">Vendedores</button>
+      <button class="tab" data-tab="solicitudes">Solicitudes <span class="count" id="cnt-solicitudes">0</span></button>
+      <button class="tab" data-tab="personal">Personal de acceso</button>
+      <button class="tab" data-tab="historial">Historial de ingresos</button>
+      <button class="tab" data-tab="eventos">Eventos</button>
+    </nav>
+
+    <!-- RESUMEN -->
+    <section data-panel="resumen">
+      <div class="stats" id="stats"></div>
+      <div class="card">
+        <h3>Ocupación</h3>
+        <div class="progress" style="height:14px" id="barra-ocupacion"></div>
+        <div class="row small muted" style="margin-top:8px;gap:18px">
+          <span><span class="badge b-ok">&nbsp;</span> Vendidas</span>
+          <span><span class="badge b-info">&nbsp;</span> Utilizadas</span>
+          <span><span class="badge b-warn">&nbsp;</span> Reservadas</span>
+          <span><span class="badge b-mute">&nbsp;</span> Disponibles</span>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Ventas por vendedor</h3>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Vendedor</th><th>Código</th><th>Vendidas</th><th>Utilizadas</th><th>Reservadas</th><th class="hide-sm">Recaudado</th></tr></thead>
+          <tbody id="tabla-ranking"></tbody>
+        </table></div>
+      </div>
+    </section>
+
+    <!-- ENTRADAS -->
+    <section data-panel="entradas" class="hidden">
+      <div class="row" style="margin-bottom:12px">
+        <input id="ent-buscar" class="grow" placeholder="Buscar por DNI, nombre, vendedor o código">
+        <select id="ent-estado" style="max-width:170px">
+          <option value="">Todos los estados</option>
+          <option value="reservada">Reservadas</option>
+          <option value="vendida">Vendidas</option>
+          <option value="utilizada">Utilizadas</option>
+          <option value="anulada">Anuladas</option>
+          <option value="vencida">Vencidas</option>
+          <option value="cancelada">Canceladas</option>
+        </select>
+        <select id="ent-vendedor" style="max-width:200px"></select>
+        <button class="btn" id="ent-csv">Exportar CSV</button>
+      </div>
+      <p class="small muted" id="ent-resumen"></p>
+      <div class="table-wrap"><table>
+        <thead><tr>
+          <th>Comprador</th><th>DNI</th><th>Vendedor</th><th class="hide-sm">Evento</th><th>Código</th>
+          <th>Estado</th><th class="hide-sm">Venta</th><th class="hide-sm">Ingreso</th><th></th>
+        </tr></thead>
+        <tbody id="tabla-entradas"></tbody>
+      </table></div>
+    </section>
+
+    <!-- VENDEDORES -->
+    <section data-panel="vendedores" class="hidden">
+      <div class="row" style="margin-bottom:12px">
+        <input id="ven-buscar" class="grow" placeholder="Buscar vendedor">
+        <button class="btn btn-primary" data-nuevo-usuario="vendedor">+ Registrar vendedor</button>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Nombre</th><th>Código</th><th class="hide-sm">Email</th><th>Estado</th>
+          <th>Ventas</th><th>Utilizadas</th><th></th></tr></thead>
+        <tbody id="tabla-vendedores"></tbody>
+      </table></div>
+    </section>
+
+    <!-- SOLICITUDES -->
+    <section data-panel="solicitudes" class="hidden">
+      <div class="table-wrap"><table>
+        <thead><tr><th>Nombre</th><th>Email</th><th class="hide-sm">Fecha</th><th>Estado</th><th></th></tr></thead>
+        <tbody id="tabla-solicitudes"></tbody>
+      </table></div>
+    </section>
+
+    <!-- PERSONAL -->
+    <section data-panel="personal" class="hidden">
+      <div class="row" style="margin-bottom:12px">
+        <p class="muted grow" style="margin:0">Personas autorizadas a escanear entradas en la puerta.</p>
+        <button class="btn btn-primary" data-nuevo-usuario="acceso">+ Registrar personal</button>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Nombre</th><th class="hide-sm">Email</th><th>Estado</th><th>Ingresos registrados</th><th></th></tr></thead>
+        <tbody id="tabla-personal"></tbody>
+      </table></div>
+    </section>
+
+    <!-- HISTORIAL -->
+    <section data-panel="historial" class="hidden">
+      <div class="row" style="margin-bottom:12px">
+        <input id="his-buscar" class="grow" placeholder="Buscar por comprador, DNI, vendedor, controlador o código">
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Fecha y hora</th><th>Comprador</th><th class="hide-sm">DNI</th><th>Vendedor</th><th>Controlador</th><th class="hide-sm">Código</th></tr></thead>
+        <tbody id="tabla-historial"></tbody>
+      </table></div>
+    </section>
+
+    <!-- EVENTOS -->
+    <section data-panel="eventos" class="hidden">
+      <div class="row" style="margin-bottom:12px">
+        <span class="grow"></span>
+        <button class="btn btn-primary" id="btn-nuevo-evento">+ Nuevo evento</button>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Evento</th><th>Fecha</th><th>Precio</th><th>Límite</th><th>Vendidas</th>
+          <th>Reservadas</th><th>Disponibles</th><th>Estado</th><th></th></tr></thead>
+        <tbody id="tabla-eventos"></tbody>
+      </table></div>
+    </section>
+  </main>
+
+  <!-- Diálogo: evento -->
+  <dialog id="dlg-evento">
+    <form id="form-evento" method="dialog" novalidate>
+      <h2 id="dlg-evento-titulo">Nuevo evento</h2>
+      <div class="field"><label for="ev-nombre">Nombre</label><input id="ev-nombre" maxlength="80" required></div>
+      <div class="field"><label for="ev-fecha">Fecha y hora</label><input id="ev-fecha" type="datetime-local" required></div>
+      <div class="row">
+        <div class="field grow"><label for="ev-precio">Precio</label><input id="ev-precio" type="number" min="0" step="1" required></div>
+        <div class="field grow"><label for="ev-limite">Límite de entradas</label><input id="ev-limite" type="number" min="1" max="10000" step="1" required></div>
+      </div>
+      <div class="field"><label for="ev-estado">Estado</label>
+        <select id="ev-estado">
+          <option value="activo">Activo (a la venta y en puerta)</option>
+          <option value="pausado">Pausado (sin ventas)</option>
+          <option value="finalizado">Finalizado</option>
+        </select>
+      </div>
+      <p class="small muted" id="ev-aviso"></p>
+      <div class="row end">
+        <button type="button" class="btn btn-ghost" id="ev-cancelar">Cancelar</button>
+        <button type="submit" class="btn btn-primary" id="ev-guardar">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Diálogo: nuevo usuario -->
+  <dialog id="dlg-usuario">
+    <form id="form-usuario" method="dialog" novalidate>
+      <h2 id="dlg-usuario-titulo">Registrar usuario</h2>
+      <div class="field"><label for="us-nombre">Nombre y apellido</label><input id="us-nombre" maxlength="80" required></div>
+      <div class="field"><label for="us-email">Email</label><input id="us-email" type="email" required></div>
+      <div class="field"><label for="us-pass">Contraseña inicial (opcional)</label>
+        <input id="us-pass" type="text" minlength="8" placeholder="Vacío = se envía email para crearla" autocomplete="off"></div>
+      <p class="small muted">Se le enviará un email para que defina su propia contraseña.</p>
+      <div class="row end">
+        <button type="button" class="btn btn-ghost" id="us-cancelar">Cancelar</button>
+        <button type="submit" class="btn btn-primary" id="us-guardar">Registrar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Diálogo: ver entrada -->
+  <dialog id="dlg-ticket">
+    <div id="ticket-cont"></div>
+    <div class="row end"><button class="btn btn-ghost" id="btn-cerrar-ticket">Cerrar</button></div>
+  </dialog>
+
+  <script type="module" src="js/admin/admin.js"></script>
+</body>
+</html>

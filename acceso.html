@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0a10">
+  <title>Acceso · Zenit</title>
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/acceso.css">
+  <script src="assets/vendor/html5-qrcode.min.js" defer></script>
+</head>
+<body class="acceso cargando">
+  <div class="loader">Cargando…</div>
+
+  <header class="topbar">
+    <span class="brand">ZENIT<small>Acceso</small></span>
+    <span class="spacer"></span>
+    <span class="user-chip" id="user-chip"></span>
+    <button class="btn btn-sm btn-ghost" id="btn-salir">Salir</button>
+  </header>
+
+  <main class="container narrow">
+    <!-- Paso 1: elegir evento -->
+    <section id="paso-evento" class="card">
+      <h2>¿Qué evento estás controlando?</h2>
+      <div class="field">
+        <select id="evento"></select>
+      </div>
+      <button class="btn btn-primary btn-block btn-xl" id="btn-comenzar">Comenzar control</button>
+    </section>
+
+    <!-- Paso 2: escanear -->
+    <section id="paso-escaner" class="hidden">
+      <div class="event-pill">
+        <div>
+          <div class="small muted">Controlando</div>
+          <strong id="evento-actual"></strong>
+        </div>
+        <button class="btn btn-sm" id="btn-cambiar">Cambiar</button>
+      </div>
+
+      <div id="lector"></div>
+      <p class="small muted" id="estado-camara" style="text-align:center;margin-top:8px">Iniciando cámara…</p>
+
+      <div class="scan-actions">
+        <button class="btn btn-xl btn-primary hidden" id="btn-reanudar">Escanear</button>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <div class="row"><h3 class="grow" style="margin:0">Mis ingresos registrados</h3>
+          <span class="badge b-info" id="contador-ingresos">0</span></div>
+        <ul class="historial-mini" id="mis-ingresos"></ul>
+      </div>
+    </section>
+  </main>
+
+  <!-- Resultado del escaneo -->
+  <div id="resultado" class="resultado hidden" role="alertdialog" aria-live="assertive"></div>
+
+  <script type="module" src="js/access/acceso.js"></script>
+</body>
+</html>
