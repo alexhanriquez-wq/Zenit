@@ -6,12 +6,60 @@ import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.
 import {
   getAuth, createUserWithEmailAndPassword, signOut
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { $, esc, toast, mensajeError, setCargando, fmtFecha, normalizar } from "../common/ui.js";
+import { $, esc, toast, mensajeError, setCargando, fmtFecha, fmtMoneda, normalizar } from "../common/ui.js";
 import { generarCodigoVendedor } from "../common/tokens.js";
 import { ventasPorVendedor } from "./resumen.js";
+import { asignarCupo, extenderCupo, quitarCupo, ErrorNegocio } from "../services/entradas.js";
 
 let estadoRef;
 let rolNuevo = "vendedor";
+let cupoVendedor = null; // vendedor del diálogo de límite
+
+// Entradas que ocupan cupo del vendedor en el evento seleccionado.
+function usadasDe(uid) {
+  return estadoRef.entradas.filter(e => e.vendedorId === uid &&
+    ["reservada", "vendida", "utilizada"].includes(e.estado)).length;
+}
+
+function abrirCupo(u) {
+  cupoVendedor = u;
+  const ev = estadoRef.eventos.find(e => e.id === estadoRef.eventoSel);
+  const cupo = estadoRef.cupos.find(c => c.vendedorId === u.uid);
+  $("#form-cupo").reset();
+  $("#cupo-info").innerHTML = cupo
+    ? `<strong>${esc(u.nombre)}</strong> lleva <strong>${cupo.usadas}</strong> de <strong>${cupo.limite}</strong> entradas en "${esc(ev?.nombre)}".`
+    : `<strong>${esc(u.nombre)}</strong> no tiene límite en "${esc(ev?.nombre)}". Ya vendió o reservó <strong>${usadasDe(u.uid)}</strong>.`;
+  $("#cupo-nuevo").classList.toggle("hidden", !!cupo);
+  $("#cupo-extender").classList.toggle("hidden", !cupo);
+  $("#cupo-quitar").classList.toggle("hidden", !cupo);
+  $("#dlg-cupo").showModal();
+}
+
+async function guardarCupo(sumar) {
+  const u = cupoVendedor;
+  const eventoId = estadoRef.eventoSel;
+  const cupo = estadoRef.cupos.find(c => c.vendedorId === u.uid);
+  const btn = $("#cupo-guardar");
+  setCargando(btn, true, "Guardando…");
+  try {
+    if (cupo) {
+      const n = sumar ?? parseInt($("#cupo-sumar").value, 10);
+      if (!(n > 0)) return toast("Indicá cuántas entradas sumar.", "bad");
+      const nuevo = await extenderCupo(eventoId, u.uid, n);
+      toast(`Límite de ${u.nombre} extendido a ${nuevo}.`, "ok");
+    } else {
+      const limite = parseInt($("#cupo-limite").value, 10);
+      if (!(limite >= 0)) return toast("Indicá un límite válido.", "bad");
+      const usadas = usadasDe(u.uid);
+      if (limite < usadas && !confirm(`${u.nombre} ya tiene ${usadas} entradas. Con un límite de ${limite} no podrá vender más. ¿Continuar?`)) return;
+      await asignarCupo({ eventoId, vendedor: u, limite, usadas });
+      toast(`Límite de ${limite} entradas asignado a ${u.nombre}.`, "ok");
+    }
+    $("#dlg-cupo").close();
+  } catch (e) {
+    toast(e instanceof ErrorNegocio ? e.message : mensajeError(e), "bad");
+  } finally { setCargando(btn, false); }
+}
 
 function etiquetaEstado(u) {
   if (u.estado === "pendiente") return `<span class="badge b-warn">Pendiente</span>`;
@@ -29,15 +77,33 @@ export function renderUsuarios(estado) {
     .filter(u => u.rol === "vendedor" && u.estado === "aprobado")
     .filter(u => !q || normalizar(`${u.nombre} ${u.email} ${u.codigo}`).includes(q))
     .sort((a, b) => a.nombre.localeCompare(b.nombre));
+  const hayEvento = estado.eventoSel && estado.eventoSel !== "todos";
+  const ev = hayEvento ? estado.eventos.find(e => e.id === estado.eventoSel) : null;
+  $("#ven-ayuda").textContent = hayEvento
+    ? `Límites de venta para "${ev?.nombre ?? ""}". Sin límite asignado, el vendedor puede vender hasta agotar el evento.`
+    : "Elegí un evento arriba para ver y asignar límites de venta por vendedor.";
+
   $("#tabla-vendedores").innerHTML = vendedores.length ? vendedores.map(u => {
-    const s = stats.get(u.uid) || { vendidas: 0, utilizadas: 0 };
+    const s = stats.get(u.uid) || { vendidas: 0, utilizadas: 0, comision: 0 };
+    const cupo = estado.cupos.find(c => c.vendedorId === u.uid);
+    let celdaCupo = `<span class="muted small">—</span>`;
+    if (hayEvento) {
+      celdaCupo = cupo
+        ? `<span class="badge ${cupo.usadas >= cupo.limite ? "b-bad" : "b-ok"}">${cupo.usadas} / ${cupo.limite}</span>
+           ${cupo.usadas >= cupo.limite ? `<div class="small" style="color:#fca5a5">Límite alcanzado</div>` : ""}`
+        : `<span class="muted small">Sin límite</span>`;
+    }
     return `<tr>
       <td>${esc(u.nombre)}</td><td class="mono">${esc(u.codigo || "—")}</td>
       <td class="hide-sm small">${esc(u.email)}</td><td>${etiquetaEstado(u)}</td>
       <td>${s.vendidas}</td><td>${s.utilizadas}</td>
-      <td class="actions"><button class="btn btn-sm ${u.activo ? "btn-bad" : "btn-ok"}" data-toggle="${u.uid}">
+      <td>${celdaCupo}</td>
+      <td class="hide-sm">${fmtMoneda(s.comision)}</td>
+      <td class="actions">
+        ${hayEvento ? `<button class="btn btn-sm" data-cupo="${u.uid}">${cupo ? "Extender" : "Poner límite"}</button>` : ""}
+        <button class="btn btn-sm ${u.activo ? "btn-bad" : "btn-ok"}" data-toggle="${u.uid}">
         ${u.activo ? "Desactivar" : "Activar"}</button></td></tr>`;
-  }).join("") : `<tr><td colspan="7" class="empty">No hay vendedores aprobados.</td></tr>`;
+  }).join("") : `<tr><td colspan="9" class="empty">No hay vendedores aprobados.</td></tr>`;
 
   // ---- Solicitudes
   const solicitudes = estado.usuarios.filter(u => u.rol === "vendedor" && u.estado !== "aprobado")
@@ -121,7 +187,12 @@ export function initUsuarios(estado) {
   document.body.addEventListener("click", ev => {
     const b = ev.target.closest("button");
     if (!b) return;
-    if (b.dataset.toggle) {
+    if (b.dataset.cupo) {
+      const u = estadoRef.usuarios.find(x => x.uid === b.dataset.cupo);
+      if (u) abrirCupo(u);
+    } else if (b.dataset.sumar) {
+      guardarCupo(parseInt(b.dataset.sumar, 10));
+    } else if (b.dataset.toggle) {
       const u = estadoRef.usuarios.find(x => x.uid === b.dataset.toggle);
       if (!u) return;
       if (u.activo && !confirm(`¿Desactivar a ${u.nombre}? No podrá operar hasta que lo reactives.`)) return;
@@ -141,6 +212,18 @@ export function initUsuarios(estado) {
       $("#dlg-usuario").showModal();
     }
   });
+
+  $("#cupo-cancelar").onclick = () => $("#dlg-cupo").close();
+  $("#form-cupo").addEventListener("submit", ev => { ev.preventDefault(); guardarCupo(); });
+  $("#cupo-quitar").onclick = async () => {
+    const u = cupoVendedor;
+    if (!confirm(`¿Quitar el límite de ${u.nombre}? Podrá vender hasta agotar el evento.`)) return;
+    try {
+      await quitarCupo(estadoRef.eventoSel, u.uid);
+      $("#dlg-cupo").close();
+      toast("Límite quitado.", "ok");
+    } catch (e) { toast(mensajeError(e), "bad"); }
+  };
 
   $("#us-cancelar").onclick = () => $("#dlg-usuario").close();
   $("#form-usuario").addEventListener("submit", async ev => {

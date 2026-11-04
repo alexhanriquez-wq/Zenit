@@ -1,6 +1,6 @@
 // Listado, búsqueda, anulación y exportación de entradas.
 import { $, esc, toast, mensajeError, fmtFecha, badge, normalizar, aFecha } from "../common/ui.js";
-import { anularEntrada, liberarReserva, ErrorNegocio } from "../services/entradas.js";
+import { anularEntrada, liberarReserva, comisionDe, ErrorNegocio } from "../services/entradas.js";
 import { renderTicket } from "../common/ticket-view.js";
 
 let estadoRef;
@@ -49,12 +49,16 @@ export function renderEntradas(estado) {
 
 function csv(estado) {
   const cols = ["codigo", "estado", "eventoNombre", "compradorNombre", "compradorDni",
-    "vendedorNombre", "vendedorCodigo", "precio", "fechaCreacion", "fechaVenta", "fechaIngreso", "controladorNombre"];
+    "vendedorNombre", "vendedorCodigo", "precio", "comision", "montoComision",
+    "fechaCreacion", "fechaVenta", "fechaIngreso", "controladorNombre"];
   const celda = v => {
     const s = v && typeof v.toDate === "function" ? fmtFecha(v) : String(v ?? "");
     return `"${s.replace(/"/g, '""')}"`;
   };
-  const lineas = [cols.join(";"), ...filtradas(estado).map(e => cols.map(c => celda(e[c])).join(";"))];
+  const lineas = [cols.join(";"), ...filtradas(estado).map(e => {
+    const fila = { ...e, comision: e.comision ?? 0, montoComision: comisionDe(e) };
+    return cols.map(c => celda(fila[c])).join(";");
+  })];
   const blob = new Blob(["﻿" + lineas.join("\n")], { type: "text/csv;charset=utf-8" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);

@@ -7,5 +7,5 @@ export {
 export {
   doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc,
   query, where, orderBy, limit, onSnapshot, runTransaction,
-  serverTimestamp, Timestamp
+  serverTimestamp, Timestamp, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";

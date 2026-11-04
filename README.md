@@ -63,6 +63,17 @@ El **id del documento es el token secreto del QR** (40 caracteres hex = 160 bits
 
 Estados: `reservada → vendida → utilizada`, y además `anulada`, `vencida`, `cancelada`.
 
+### `cupos/{eventoId}_{vendedorId}` — límite de ventas por vendedor
+`vendedorId, eventoId, vendedorNombre, limite, usadas, ultimaEntrada, actualizadoEn`
+
+- Lo crea el admin desde la pestaña **Vendedores** (con un evento seleccionado) y lo puede **extender** (+5, +10, +20 o la cantidad que quiera) o **quitar**.
+- `usadas` cuenta reservadas + vendidas + utilizadas del vendedor en ese evento. Baja cuando una reserva se cancela o vence, o cuando se anula una entrada.
+- Si un vendedor no tiene cupo, solo lo limita el cupo general del evento.
+- Las reglas exigen que cada reserva sume 1 a `usadas` sin superar `limite`, en la misma transacción que crea la entrada.
+
+### Comisión
+Cada evento tiene `comision` (% de 0 a 100). Cada entrada guarda el % vigente al momento de venderse (`entradas.comision`), así que cambiar la comisión de un evento afecta solo a las ventas nuevas. Comisión de una entrada = `precio × comision / 100`, solo para entradas vendidas o utilizadas. El admin ve comisión y monto "a entregar" por vendedor; el vendedor ve su propia comisión.
+
 ### `ingresos/{token}`
 Un documento por ingreso, con **el mismo id que la entrada**: `entradaId, eventoId, codigo, compradorNombre, compradorDni, vendedorId, vendedorNombre, controladorId, controladorNombre, fechaHora`. Inmutable.
 
@@ -116,7 +127,7 @@ El rol vive en `usuarios/{uid}`, que **solo un administrador puede modificar**. 
 
 Además:
 - `vendedorId` debe ser igual a `request.auth.uid`: un vendedor no puede vender en nombre de otro ni cambiarlo después.
-- Las entradas **no se pueden borrar** (`delete: if false`) y los ingresos son inmutables.
+- Las entradas y los ingresos son inmutables y **solo se pueden borrar al borrar su evento**: el admin puede eliminar un evento con ventas, y las reglas solo permiten borrar sus entradas/ingresos si el evento ya no está `activo` (el panel lo pasa a `finalizado` antes de empezar). Pide escribir BORRAR y recomienda exportar el CSV antes.
 - El ingreso exige `vendida → utilizada` **y** crear `ingresos/{token}` en la misma transacción. Si dos celulares escanean el mismo QR a la vez, solo uno puede confirmar; Firestore reintenta el segundo, que lee `utilizada` y muestra **ENTRADA YA UTILIZADA**.
 - Las fechas (`fechaVenta`, `fechaIngreso`, `fechaHora`) deben ser la hora del servidor (`request.time`).
 - El QR contiene solo el token; no lleva datos personales.

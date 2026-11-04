@@ -18,6 +18,7 @@ export const estado = {
   usuarios: [],
   entradas: [],
   ingresos: [],
+  cupos: [],      // límites por vendedor del evento seleccionado
   eventoSel: null // id de evento o "todos"
 };
 
@@ -55,9 +56,10 @@ onSnapshot(collection(db, "usuarios"), snap => {
   renderTodo();
 }, err);
 
-let offEntradas = null, offIngresos = null;
+let offEntradas = null, offIngresos = null, offCupos = null;
 function suscribirEvento() {
-  offEntradas?.(); offIngresos?.();
+  offEntradas?.(); offIngresos?.(); offCupos?.();
+  estado.cupos = [];
   const filtro = estado.eventoSel && estado.eventoSel !== "todos"
     ? [where("eventoId", "==", estado.eventoSel)] : [];
   offEntradas = onSnapshot(query(collection(db, "entradas"), ...filtro), snap => {
@@ -70,10 +72,19 @@ function suscribirEvento() {
       .sort((a, b) => (aFecha(b.fechaHora) || 0) - (aFecha(a.fechaHora) || 0));
     renderTodo();
   }, err);
+  offCupos = filtro.length ? onSnapshot(query(collection(db, "cupos"), ...filtro), snap => {
+    estado.cupos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderTodo();
+  }, err) : null;
 }
 
 function pintarSelectorEvento() {
   const sel = $("#sel-evento");
+  // Si el evento seleccionado fue borrado, volver a elegir uno.
+  if (estado.eventoSel && estado.eventoSel !== "todos" && !estado.eventos.some(e => e.id === estado.eventoSel)) {
+    estado.eventoSel = null;
+    estado.entradas = []; estado.ingresos = []; estado.cupos = [];
+  }
   if (!estado.eventoSel) {
     // Por defecto: el próximo evento activo, o el más reciente.
     const ahora = Date.now();

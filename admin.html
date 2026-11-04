@@ -52,7 +52,8 @@
       <div class="card">
         <h3>Ventas por vendedor</h3>
         <div class="table-wrap"><table>
-          <thead><tr><th>Vendedor</th><th>Código</th><th>Vendidas</th><th>Utilizadas</th><th>Reservadas</th><th class="hide-sm">Recaudado</th></tr></thead>
+          <thead><tr><th>Vendedor</th><th>Código</th><th>Vendidas</th><th>Utilizadas</th><th>Reservadas</th>
+            <th class="hide-sm">Recaudado</th><th>Comisión</th><th class="hide-sm">A entregar</th></tr></thead>
           <tbody id="tabla-ranking"></tbody>
         </table></div>
       </div>
@@ -90,9 +91,10 @@
         <input id="ven-buscar" class="grow" placeholder="Buscar vendedor">
         <button class="btn btn-primary" data-nuevo-usuario="vendedor">+ Registrar vendedor</button>
       </div>
+      <p class="small muted" id="ven-ayuda"></p>
       <div class="table-wrap"><table>
         <thead><tr><th>Nombre</th><th>Código</th><th class="hide-sm">Email</th><th>Estado</th>
-          <th>Ventas</th><th>Utilizadas</th><th></th></tr></thead>
+          <th>Ventas</th><th>Utilizadas</th><th>Límite de ventas</th><th class="hide-sm">Comisión</th><th></th></tr></thead>
         <tbody id="tabla-vendedores"></tbody>
       </table></div>
     </section>
@@ -135,7 +137,7 @@
         <button class="btn btn-primary" id="btn-nuevo-evento">+ Nuevo evento</button>
       </div>
       <div class="table-wrap"><table>
-        <thead><tr><th>Evento</th><th>Fecha</th><th>Precio</th><th>Límite</th><th>Vendidas</th>
+        <thead><tr><th>Evento</th><th>Fecha</th><th>Precio</th><th>Comisión</th><th>Límite</th><th>Vendidas</th>
           <th>Reservadas</th><th>Disponibles</th><th>Estado</th><th></th></tr></thead>
         <tbody id="tabla-eventos"></tbody>
       </table></div>
@@ -151,6 +153,10 @@
       <div class="row">
         <div class="field grow"><label for="ev-precio">Precio</label><input id="ev-precio" type="number" min="0" step="1" required></div>
         <div class="field grow"><label for="ev-limite">Límite de entradas</label><input id="ev-limite" type="number" min="1" max="10000" step="1" required></div>
+      </div>
+      <div class="field"><label for="ev-comision">Comisión de los vendedores (%)</label>
+        <input id="ev-comision" type="number" min="0" max="100" step="0.5" required>
+        <div class="small muted" id="ev-comision-info" style="margin-top:6px"></div>
       </div>
       <div class="field"><label for="ev-estado">Estado</label>
         <select id="ev-estado">
@@ -179,6 +185,33 @@
       <div class="row end">
         <button type="button" class="btn btn-ghost" id="us-cancelar">Cancelar</button>
         <button type="submit" class="btn btn-primary" id="us-guardar">Registrar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Diálogo: límite de ventas del vendedor -->
+  <dialog id="dlg-cupo">
+    <form id="form-cupo" method="dialog" novalidate>
+      <h2>Límite de ventas</h2>
+      <p id="cupo-info" class="muted"></p>
+      <div id="cupo-nuevo" class="field">
+        <label for="cupo-limite">Cantidad máxima de entradas que puede vender en este evento</label>
+        <input id="cupo-limite" type="number" min="0" max="10000" step="1">
+      </div>
+      <div id="cupo-extender" class="field">
+        <label for="cupo-sumar">Sumar entradas al límite</label>
+        <div class="row">
+          <button type="button" class="btn btn-sm" data-sumar="5">+5</button>
+          <button type="button" class="btn btn-sm" data-sumar="10">+10</button>
+          <button type="button" class="btn btn-sm" data-sumar="20">+20</button>
+          <input id="cupo-sumar" type="number" min="1" max="10000" step="1" class="grow" placeholder="Otra cantidad">
+        </div>
+      </div>
+      <div class="row end">
+        <button type="button" class="btn btn-bad" id="cupo-quitar">Quitar límite</button>
+        <span class="grow"></span>
+        <button type="button" class="btn btn-ghost" id="cupo-cancelar">Cancelar</button>
+        <button type="submit" class="btn btn-primary" id="cupo-guardar">Guardar</button>
       </div>
     </form>
   </dialog>

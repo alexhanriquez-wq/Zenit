@@ -1,5 +1,6 @@
 // Estadísticas y ranking de vendedores para el evento seleccionado.
 import { $, esc, fmtMoneda } from "../common/ui.js";
+import { comisionDe } from "../services/entradas.js";
 
 export function eventosSeleccionados(estado) {
   return estado.eventoSel === "todos"
@@ -17,8 +18,10 @@ export function ventasPorVendedor(entradas) {
   const m = new Map();
   for (const e of entradas) {
     const r = m.get(e.vendedorId) || { vendidas: 0, utilizadas: 0, reservadas: 0, recaudado: 0,
-      nombre: e.vendedorNombre, codigo: e.vendedorCodigo };
-    if (e.estado === "vendida" || e.estado === "utilizada") { r.vendidas++; r.recaudado += e.precio || 0; }
+      comision: 0, nombre: e.vendedorNombre, codigo: e.vendedorCodigo };
+    if (e.estado === "vendida" || e.estado === "utilizada") {
+      r.vendidas++; r.recaudado += e.precio || 0; r.comision += comisionDe(e);
+    }
     if (e.estado === "utilizada") r.utilizadas++;
     if (e.estado === "reservada") r.reservadas++;
     m.set(e.vendedorId, r);
@@ -54,6 +57,7 @@ export function renderResumen(estado) {
   const ranking = [...ventasPorVendedor(estado.entradas).values()].sort((a, b) => b.vendidas - a.vendidas);
   $("#tabla-ranking").innerHTML = ranking.length ? ranking.map(r => `
     <tr><td>${esc(r.nombre)}</td><td class="mono">${esc(r.codigo)}</td><td>${r.vendidas}</td>
-    <td>${r.utilizadas}</td><td>${r.reservadas}</td><td class="hide-sm">${fmtMoneda(r.recaudado)}</td></tr>`).join("")
-    : `<tr><td colspan="6" class="empty">Sin ventas.</td></tr>`;
+    <td>${r.utilizadas}</td><td>${r.reservadas}</td><td class="hide-sm">${fmtMoneda(r.recaudado)}</td>
+    <td>${fmtMoneda(r.comision)}</td><td class="hide-sm">${fmtMoneda(r.recaudado - r.comision)}</td></tr>`).join("")
+    : `<tr><td colspan="8" class="empty">Sin ventas.</td></tr>`;
 }
