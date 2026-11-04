@@ -1,6 +1,6 @@
 // Renderiza la tarjeta de la entrada dentro de un contenedor.
 import { APP } from "../firebase/config.js";
-import { esc, fmtFecha, fmtMoneda, badge } from "./ui.js";
+import { esc, fmtFecha, badge } from "./ui.js";
 import { dibujarQR, descargarTicket, compartirTicket } from "./ticket.js";
 
 /**
@@ -20,10 +20,9 @@ export function renderTicket(cont, en, opts = {}) {
       <dl>
         <dt>Evento</dt><dd>${esc(en.eventoNombre)}</dd>
         <dt>Fecha</dt><dd>${fmtFecha(en.eventoFecha)}</dd>
-        <dt>Comprador</dt><dd>${esc(en.compradorNombre)}</dd>
+        <dt>Invitado al evento</dt><dd>${esc(en.compradorNombre)}</dd>
         ${mostrarDni && en.compradorDni ? `<dt>DNI</dt><dd>${esc(en.compradorDni)}</dd>` : ""}
-        <dt>Vendedor</dt><dd>${esc(en.vendedorNombre)}</dd>
-        ${typeof en.precio === "number" ? `<dt>Precio</dt><dd>${fmtMoneda(en.precio)}</dd>` : ""}
+        <dt>RRPP</dt><dd>${esc(en.vendedorNombre)}</dd>
       </dl>
       <div class="nota">Válida para un solo ingreso. No compartas el QR con otras personas.</div>
     </div>

@@ -4,7 +4,7 @@
 // El QR contiene EXCLUSIVAMENTE el token aleatorio (40 hex), sin datos
 // personales. La validez se decide siempre en la puerta contra Firestore.
 import { APP } from "../firebase/config.js";
-import { fmtFecha, fmtMoneda, aFecha } from "./ui.js";
+import { fmtFecha, aFecha } from "./ui.js";
 
 function matrizQR(texto) {
   // eslint-disable-next-line no-undef
@@ -115,17 +115,18 @@ export function dibujarTicket(en) {
   const filas = [
     ["Evento", d.e],
     ["Fecha", d.f ? fmtFecha(d.f) : "—"],
-    ["Comprador", d.n],
-    ["Vendedor", d.v]
+    ["Invitado al evento", d.n],
+    ["RRPP", d.v]
   ];
-  if (typeof en.precio === "number") filas.push(["Precio", fmtMoneda(en.precio)]);
+  // El precio no se imprime en la entrada (solo lo ven vendedor y admin en sus paneles).
   ctx.textAlign = "left";
   let y = 810;
+  const xValor = 330; // deja lugar para la etiqueta más larga ("INVITADO AL EVENTO")
   for (const [k, v] of filas) {
-    ctx.fillStyle = "#8f8aa3"; ctx.font = "500 24px system-ui, sans-serif";
-    ctx.fillText(k.toUpperCase(), 70, y);
+    ctx.fillStyle = "#8f8aa3"; ctx.font = "500 20px system-ui, sans-serif";
+    ctx.fillText(recortar(ctx, k.toUpperCase(), xValor - 90), 60, y);
     ctx.fillStyle = "#f4f3f8"; ctx.font = "600 30px system-ui, sans-serif";
-    ctx.fillText(recortar(ctx, String(v ?? "—"), W - 300), 270, y);
+    ctx.fillText(recortar(ctx, String(v ?? "—"), W - xValor - 50), xValor, y);
     y += 62;
   }
 
@@ -161,7 +162,8 @@ export async function descargarTicket(en) {
 
 function textoCompartir(en) {
   return `🎟️ Tu entrada para *${en.eventoNombre}*\nCódigo: ${en.codigo}\n` +
-         `Comprador: ${en.compradorNombre}\n\nMostrá el QR en la puerta:\n${enlaceEntrada(en)}`;
+         `Invitado al evento: ${en.compradorNombre}\nRRPP: ${en.vendedorNombre}\n\n` +
+         `Mostrá el QR en la puerta:\n${enlaceEntrada(en)}`;
 }
 
 /**
