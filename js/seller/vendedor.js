@@ -66,8 +66,8 @@ function pintarEventos() {
   sel.innerHTML = eventos.length
     ? eventos.map(ev => {
         const motivo = disponibles(ev) <= 0 ? " (agotado)" : puedoVender(ev) <= 0 ? " (límite alcanzado)" : "";
-        return `<option value="${ev.id}" ${motivo ? "disabled" : ""}>
-        ${esc(ev.nombre)} — ${fmtFecha(ev.fecha, false)}${motivo}</option>`;
+        // No se deshabilita la opción: así el vendedor ve el aviso del motivo.
+        return `<option value="${ev.id}">${esc(ev.nombre)} — ${fmtFecha(ev.fecha, false)}${motivo}</option>`;
       }).join("")
     : `<option value="">No hay eventos activos</option>`;
   if (previo && eventos.some(e => e.id === previo)) sel.value = previo;
@@ -92,15 +92,29 @@ function pintarEventos() {
 function actualizarInfoEvento() {
   const ev = eventos.find(e => e.id === $("#evento").value);
   $("#precio").value = ev ? fmtMoneda(ev.precio) : "";
+  const info = $("#evento-info");
+  const btn = $("#btn-vender");
+  info.className = "small muted";
+  btn.textContent = "Reservar entrada";
   if (!ev) {
-    $("#evento-info").textContent = "";
+    info.textContent = "";
   } else {
     const cupo = cupos.get(ev.id);
-    $("#evento-info").textContent = `Quedan ${disponibles(ev)} de ${ev.limite} entradas en el evento.` +
-      (cupo ? ` Tu límite: ${cupo.usadas} de ${cupo.limite}` +
-        (cupo.usadas >= cupo.limite ? " — alcanzado, pedile al administrador que lo extienda." : ".") : "");
+    if (disponibles(ev) <= 0) {
+      info.className = "alert alert-bad";
+      info.textContent = "Evento agotado: no quedan entradas disponibles.";
+      btn.textContent = "Evento agotado";
+    } else if (cupo && cupo.usadas >= cupo.limite) {
+      info.className = "alert alert-warn";
+      info.innerHTML = `<strong>Alcanzaste tu límite de ventas</strong> para este evento ` +
+        `(${cupo.usadas} de ${cupo.limite}). Pedile al administrador que te lo extienda para seguir vendiendo.`;
+      btn.textContent = "Límite alcanzado";
+    } else {
+      info.textContent = `Quedan ${disponibles(ev)} de ${ev.limite} entradas en el evento.` +
+        (cupo ? ` Tu límite: ${cupo.usadas} de ${cupo.limite} (te quedan ${cupo.limite - cupo.usadas}).` : "");
+    }
   }
-  $("#btn-vender").disabled = !ev || puedoVender(ev) <= 0;
+  btn.disabled = !ev || puedoVender(ev) <= 0;
 }
 $("#evento").addEventListener("change", actualizarInfoEvento);
 $("#dni").addEventListener("input", e => { e.target.value = e.target.value.replace(/\D/g, ""); });
