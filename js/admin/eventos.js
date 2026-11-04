@@ -57,6 +57,7 @@ function abrir(ev = null) {
       `Cambiar el precio no modifica las entradas ya emitidas.`
     : `Límite predeterminado: ${APP.limitePorDefecto} entradas, compartido entre todos los vendedores.`;
   infoComision();
+  $("#ev-borrar").classList.toggle("hidden", !ev); // solo al editar uno existente
   $("#dlg-evento").showModal();
 }
 
@@ -92,6 +93,12 @@ export function initEventos(estado) {
   estadoRef = estado;
   $("#btn-nuevo-evento").onclick = () => abrir();
   $("#ev-cancelar").onclick = () => $("#dlg-evento").close();
+  $("#ev-borrar").onclick = () => {
+    const ev = editando;
+    if (!ev) return;
+    $("#dlg-evento").close();
+    confirmarBorrado(ev);
+  };
   $("#ev-precio").addEventListener("input", infoComision);
   $("#ev-comision").addEventListener("input", infoComision);
 

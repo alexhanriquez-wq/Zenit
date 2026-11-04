@@ -1,7 +1,10 @@
 // Vendedores, solicitudes de registro y personal de acceso.
 import { db, auth } from "../firebase/init.js";
 import { firebaseConfig } from "../firebase/config.js";
-import { doc, updateDoc, setDoc, serverTimestamp, sendPasswordResetEmail } from "../firebase/sdk.js";
+import {
+  doc, updateDoc, setDoc, getDoc, getDocs, collection, query, where,
+  serverTimestamp, sendPasswordResetEmail
+} from "../firebase/sdk.js";
 import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getAuth, createUserWithEmailAndPassword, signOut
@@ -9,36 +12,65 @@ import {
 import { $, esc, toast, mensajeError, setCargando, fmtFecha, fmtMoneda, normalizar } from "../common/ui.js";
 import { generarCodigoVendedor } from "../common/tokens.js";
 import { ventasPorVendedor } from "./resumen.js";
-import { asignarCupo, extenderCupo, quitarCupo, ErrorNegocio } from "../services/entradas.js";
+import { asignarCupo, extenderCupo, quitarCupo, idCupo, ErrorNegocio } from "../services/entradas.js";
 
 let estadoRef;
 let rolNuevo = "vendedor";
-let cupoVendedor = null; // vendedor del diálogo de límite
+// Estado del diálogo de límite (independiente del selector de evento de arriba).
+let cupoVendedor = null;  // vendedor
+let cupoEventoId = null;  // evento elegido en el diálogo
+let cupoActual = null;    // documento de cupo leído, o null si no tiene límite
+let cupoUsadas = 0;       // entradas que ya ocupan cupo en ese evento
 
-// Entradas que ocupan cupo del vendedor en el evento seleccionado.
-function usadasDe(uid) {
-  return estadoRef.entradas.filter(e => e.vendedorId === uid &&
-    ["reservada", "vendida", "utilizada"].includes(e.estado)).length;
-}
-
-function abrirCupo(u) {
-  cupoVendedor = u;
-  const ev = estadoRef.eventos.find(e => e.id === estadoRef.eventoSel);
-  const cupo = estadoRef.cupos.find(c => c.vendedorId === u.uid);
+// Lee de Firestore el cupo y las entradas del vendedor en el evento elegido.
+async function cargarCupo() {
+  const u = cupoVendedor;
+  cupoEventoId = $("#cupo-evento").value;
+  const ev = estadoRef.eventos.find(e => e.id === cupoEventoId);
+  $("#cupo-info").textContent = "Cargando…";
+  $("#cupo-guardar").disabled = true;
+  try {
+    const [snapCupo, snapEnt] = await Promise.all([
+      getDoc(doc(db, "cupos", idCupo(cupoEventoId, u.uid))),
+      getDocs(query(collection(db, "entradas"),
+        where("eventoId", "==", cupoEventoId), where("vendedorId", "==", u.uid)))
+    ]);
+    cupoActual = snapCupo.exists() ? snapCupo.data() : null;
+    cupoUsadas = snapEnt.docs.filter(d => ["reservada", "vendida", "utilizada"].includes(d.data().estado)).length;
+  } catch (e) {
+    $("#cupo-info").textContent = mensajeError(e);
+    return;
+  }
+  const cupo = cupoActual;
   $("#form-cupo").reset();
+  $("#cupo-evento").value = cupoEventoId;
   $("#cupo-info").innerHTML = cupo
-    ? `<strong>${esc(u.nombre)}</strong> lleva <strong>${cupo.usadas}</strong> de <strong>${cupo.limite}</strong> entradas en "${esc(ev?.nombre)}".`
-    : `<strong>${esc(u.nombre)}</strong> no tiene límite en "${esc(ev?.nombre)}". Ya vendió o reservó <strong>${usadasDe(u.uid)}</strong>.`;
+    ? `<strong>${esc(u.nombre)}</strong> lleva <strong>${cupo.usadas}</strong> de <strong>${cupo.limite}</strong> entradas en "${esc(ev?.nombre)}".` +
+      (cupo.usadas >= cupo.limite ? ` <span style="color:#fca5a5">Límite alcanzado.</span>` : "")
+    : `<strong>${esc(u.nombre)}</strong> no tiene límite en "${esc(ev?.nombre)}" (puede vender hasta agotar el evento). Ya vendió o reservó <strong>${cupoUsadas}</strong>.`;
   $("#cupo-nuevo").classList.toggle("hidden", !!cupo);
   $("#cupo-extender").classList.toggle("hidden", !cupo);
   $("#cupo-quitar").classList.toggle("hidden", !cupo);
+  $("#cupo-guardar").disabled = false;
+}
+
+function abrirCupo(u) {
+  const evs = estadoRef.eventos;
+  if (!evs.length) return toast("Primero creá un evento (pestaña Eventos).", "bad");
+  cupoVendedor = u;
+  // Evento por defecto: el elegido arriba, si no el primero activo.
+  const pre = evs.find(e => e.id === estadoRef.eventoSel) || evs.find(e => e.estado === "activo") || evs[0];
+  $("#cupo-evento").innerHTML = evs.map(e =>
+    `<option value="${e.id}">${esc(e.nombre)} — ${fmtFecha(e.fecha, false)}</option>`).join("");
+  $("#cupo-evento").value = pre.id;
   $("#dlg-cupo").showModal();
+  cargarCupo();
 }
 
 async function guardarCupo(sumar) {
   const u = cupoVendedor;
-  const eventoId = estadoRef.eventoSel;
-  const cupo = estadoRef.cupos.find(c => c.vendedorId === u.uid);
+  const eventoId = cupoEventoId;
+  const cupo = cupoActual;
   const btn = $("#cupo-guardar");
   setCargando(btn, true, "Guardando…");
   try {
@@ -50,12 +82,12 @@ async function guardarCupo(sumar) {
     } else {
       const limite = parseInt($("#cupo-limite").value, 10);
       if (!(limite >= 0)) return toast("Indicá un límite válido.", "bad");
-      const usadas = usadasDe(u.uid);
+      const usadas = cupoUsadas;
       if (limite < usadas && !confirm(`${u.nombre} ya tiene ${usadas} entradas. Con un límite de ${limite} no podrá vender más. ¿Continuar?`)) return;
       await asignarCupo({ eventoId, vendedor: u, limite, usadas });
       toast(`Límite de ${limite} entradas asignado a ${u.nombre}.`, "ok");
     }
-    $("#dlg-cupo").close();
+    await cargarCupo(); // muestra el resultado actualizado en el diálogo
   } catch (e) {
     toast(e instanceof ErrorNegocio ? e.message : mensajeError(e), "bad");
   } finally { setCargando(btn, false); }
@@ -81,7 +113,7 @@ export function renderUsuarios(estado) {
   const ev = hayEvento ? estado.eventos.find(e => e.id === estado.eventoSel) : null;
   $("#ven-ayuda").textContent = hayEvento
     ? `Límites de venta para "${ev?.nombre ?? ""}". Sin límite asignado, el vendedor puede vender hasta agotar el evento.`
-    : "Elegí un evento arriba para ver y asignar límites de venta por vendedor.";
+    : "Para ver los límites en la tabla, elegí un evento arriba. Con el botón \"Límite de ventas\" podés asignarlos igual eligiendo el evento.";
 
   $("#tabla-vendedores").innerHTML = vendedores.length ? vendedores.map(u => {
     const s = stats.get(u.uid) || { vendidas: 0, utilizadas: 0, comision: 0 };
@@ -100,7 +132,7 @@ export function renderUsuarios(estado) {
       <td>${celdaCupo}</td>
       <td class="hide-sm">${fmtMoneda(s.comision)}</td>
       <td class="actions">
-        ${hayEvento ? `<button class="btn btn-sm" data-cupo="${u.uid}">${cupo ? "Extender" : "Poner límite"}</button>` : ""}
+        <button class="btn btn-sm btn-primary" data-cupo="${u.uid}">${hayEvento && cupo ? "Extender límite" : "Límite de ventas"}</button>
         <button class="btn btn-sm ${u.activo ? "btn-bad" : "btn-ok"}" data-toggle="${u.uid}">
         ${u.activo ? "Desactivar" : "Activar"}</button></td></tr>`;
   }).join("") : `<tr><td colspan="9" class="empty">No hay vendedores aprobados.</td></tr>`;
@@ -214,14 +246,15 @@ export function initUsuarios(estado) {
   });
 
   $("#cupo-cancelar").onclick = () => $("#dlg-cupo").close();
+  $("#cupo-evento").addEventListener("change", cargarCupo);
   $("#form-cupo").addEventListener("submit", ev => { ev.preventDefault(); guardarCupo(); });
   $("#cupo-quitar").onclick = async () => {
     const u = cupoVendedor;
     if (!confirm(`¿Quitar el límite de ${u.nombre}? Podrá vender hasta agotar el evento.`)) return;
     try {
-      await quitarCupo(estadoRef.eventoSel, u.uid);
-      $("#dlg-cupo").close();
+      await quitarCupo(cupoEventoId, u.uid);
       toast("Límite quitado.", "ok");
+      await cargarCupo();
     } catch (e) { toast(mensajeError(e), "bad"); }
   };
 

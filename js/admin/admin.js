@@ -78,8 +78,11 @@ function suscribirEvento() {
   }, err) : null;
 }
 
+let todosAutomatico = false; // "Todos" elegido solo porque no había eventos
+
 function pintarSelectorEvento() {
   const sel = $("#sel-evento");
+  if (todosAutomatico && estado.eventos.length) { estado.eventoSel = null; todosAutomatico = false; }
   // Si el evento seleccionado fue borrado, volver a elegir uno.
   if (estado.eventoSel && estado.eventoSel !== "todos" && !estado.eventos.some(e => e.id === estado.eventoSel)) {
     estado.eventoSel = null;
@@ -92,6 +95,7 @@ function pintarSelectorEvento() {
       .sort((a, b) => aFecha(a.fecha) - aFecha(b.fecha))
       .find(e => aFecha(e.fecha) >= ahora - 12 * 3600e3);
     estado.eventoSel = prox?.id || estado.eventos[0]?.id || "todos";
+    todosAutomatico = !estado.eventos.length;
     suscribirEvento();
   }
   sel.innerHTML = `<option value="todos">Todos los eventos</option>` +
@@ -101,6 +105,7 @@ function pintarSelectorEvento() {
 
 $("#sel-evento").addEventListener("change", e => {
   estado.eventoSel = e.target.value;
+  todosAutomatico = false;
   estado.entradas = []; estado.ingresos = [];
   suscribirEvento();
   renderTodo();

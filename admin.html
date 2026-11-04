@@ -167,6 +167,8 @@
       </div>
       <p class="small muted" id="ev-aviso"></p>
       <div class="row end">
+        <button type="button" class="btn btn-bad hidden" id="ev-borrar">Borrar evento</button>
+        <span class="grow"></span>
         <button type="button" class="btn btn-ghost" id="ev-cancelar">Cancelar</button>
         <button type="submit" class="btn btn-primary" id="ev-guardar">Guardar</button>
       </div>
@@ -193,7 +195,11 @@
   <dialog id="dlg-cupo">
     <form id="form-cupo" method="dialog" novalidate>
       <h2>Límite de ventas</h2>
-      <p id="cupo-info" class="muted"></p>
+      <div class="field">
+        <label for="cupo-evento">Evento</label>
+        <select id="cupo-evento"></select>
+      </div>
+      <p id="cupo-info" class="muted">Cargando…</p>
       <div id="cupo-nuevo" class="field">
         <label for="cupo-limite">Cantidad máxima de entradas que puede vender en este evento</label>
         <input id="cupo-limite" type="number" min="0" max="10000" step="1">
