@@ -24,6 +24,7 @@ service cloud.firestore {
     function rutaEvento(id)   { return /databases/$(database)/documents/eventos/$(id); }
     function rutaEntrada(id)  { return /databases/$(database)/documents/entradas/$(id); }
     function rutaIngreso(id)  { return /databases/$(database)/documents/ingresos/$(id); }
+    function rutaCupo(eventoId, uid) { return /databases/$(database)/documents/cupos/$(eventoId + '_' + uid); }
 
     function perfil() { return get(rutaUsuario(request.auth.uid)).data; }
     function habilitado() {
@@ -90,12 +91,13 @@ service cloud.firestore {
     //  EVENTOS
     // =================================================================
     function eventoValido(d) {
-      return d.keys().hasOnly(['nombre', 'fecha', 'precio', 'limite', 'vendidas',
+      return d.keys().hasOnly(['nombre', 'fecha', 'precio', 'comision', 'limite', 'vendidas',
                                'reservadas', 'estado', 'ultimaEntrada',
                                'creadoEn', 'actualizadoEn'])
         && textoValido(d.nombre, 2, 80)
         && d.fecha is timestamp
         && d.precio is number && d.precio >= 0
+        && (!('comision' in d) || (d.comision is number && d.comision >= 0 && d.comision <= 100))
         && d.limite is int && d.limite > 0 && d.limite <= 10000
         && d.vendidas is int && d.vendidas >= 0
         && d.reservadas is int && d.reservadas >= 0
@@ -151,9 +153,91 @@ service cloud.firestore {
       allow update: if (esAdmin() && eventoValido(request.resource.data))
                     || (esVendedor() && movimientoVendedor(eventoId));
 
+      // Un evento con ventas solo puede borrarse si ya no está activo
+      // (el panel lo pasa a "finalizado" antes de borrarlo).
       allow delete: if esAdmin()
-        && resource.data.vendidas == 0
-        && resource.data.reservadas == 0;
+        && (resource.data.estado != 'activo'
+            || (resource.data.vendidas == 0 && resource.data.reservadas == 0));
+    }
+
+    // Se pueden borrar entradas/ingresos solo de eventos inactivos o ya borrados.
+    function eventoBorrable(eventoId) {
+      return !exists(rutaEvento(eventoId)) || get(rutaEvento(eventoId)).data.estado != 'activo';
+    }
+
+    // =================================================================
+    //  CUPOS: límite de ventas por vendedor y por evento
+    //  id = {eventoId}_{vendedorId}. Si no existe, el vendedor solo
+    //  está limitado por el cupo general del evento.
+    // =================================================================
+    function cupoValido(d) {
+      return d.keys().hasOnly(['vendedorId', 'eventoId', 'vendedorNombre', 'limite',
+                               'usadas', 'ultimaEntrada', 'actualizadoEn'])
+        && d.vendedorId is string
+        && d.eventoId is string
+        && d.limite is int && d.limite >= 0 && d.limite <= 10000
+        && d.usadas is int && d.usadas >= 0;
+    }
+
+    // Alta de una entrada: el cupo del vendedor (si existe) suma 1 sin pasarse.
+    function cupoAlta(eventoId) {
+      let p = rutaCupo(eventoId, request.auth.uid);
+      return !exists(p)
+        || (getAfter(p).data.usadas == get(p).data.usadas + 1
+            && getAfter(p).data.usadas <= get(p).data.limite);
+    }
+
+    // Liberación o anulación: el cupo del vendedor (si existe) devuelve 1.
+    function cupoBaja(eventoId, vendedorId) {
+      let p = rutaCupo(eventoId, vendedorId);
+      return !exists(p)
+        || (get(p).data.usadas > 0 && getAfter(p).data.usadas == get(p).data.usadas - 1)
+        || (get(p).data.usadas == 0 && getAfter(p).data.usadas == 0);
+    }
+
+    function movimientoCupo() {
+      let antes = resource.data;
+      let despues = request.resource.data;
+      let id = despues.ultimaEntrada;
+      return cambiaSolo(['usadas', 'ultimaEntrada'])
+        && id is string
+        && existsAfter(rutaEntrada(id))
+        && getAfter(rutaEntrada(id)).data.vendedorId == request.auth.uid
+        && getAfter(rutaEntrada(id)).data.eventoId == antes.eventoId
+        && (
+          ( !exists(rutaEntrada(id))
+            && getAfter(rutaEntrada(id)).data.estado == 'reservada'
+            && despues.usadas == antes.usadas + 1
+            && despues.usadas <= antes.limite )
+          ||
+          ( exists(rutaEntrada(id))
+            && get(rutaEntrada(id)).data.estado == 'reservada'
+            && getAfter(rutaEntrada(id)).data.estado in ['vencida', 'cancelada']
+            && despues.usadas == antes.usadas - 1
+            && despues.usadas >= 0 )
+        );
+    }
+
+    match /cupos/{cupoId} {
+      // El vendedor puede leer su propio cupo aunque todavía no exista.
+      allow get: if esAdmin()
+        || (esVendedor() && cupoId.matches('^[A-Za-z0-9]+_' + request.auth.uid + '$'));
+      allow list: if esAdmin()
+        || (esVendedor() && resource.data.vendedorId == request.auth.uid);
+
+      allow create: if esAdmin()
+        && cupoValido(request.resource.data)
+        && cupoId == request.resource.data.eventoId + '_' + request.resource.data.vendedorId;
+
+      allow update: if (esAdmin()
+                         && cupoValido(request.resource.data)
+                         && request.resource.data.vendedorId == resource.data.vendedorId
+                         && request.resource.data.eventoId == resource.data.eventoId)
+                    || (esVendedor()
+                         && resource.data.vendedorId == request.auth.uid
+                         && movimientoCupo());
+
+      allow delete: if esAdmin();
     }
 
     // =================================================================
@@ -163,7 +247,7 @@ service cloud.firestore {
       return ['token', 'codigo', 'eventoId', 'eventoNombre', 'eventoFecha',
               'compradorNombre', 'compradorDni',
               'vendedorId', 'vendedorNombre', 'vendedorCodigo',
-              'precio', 'estado', 'ingresada',
+              'precio', 'comision', 'estado', 'ingresada',
               'fechaCreacion', 'venceEn', 'fechaVenta',
               'fechaIngreso', 'controladorId', 'controladorNombre'];
     }
@@ -182,6 +266,7 @@ service cloud.firestore {
         && d.eventoNombre == ev.nombre
         && d.eventoFecha == ev.fecha
         && d.precio == ev.precio
+        && d.comision == ev.get('comision', 0)
         && d.vendedorId == request.auth.uid
         && d.vendedorNombre == yo.nombre
         && d.vendedorCodigo == yo.codigo
@@ -200,7 +285,9 @@ service cloud.firestore {
         // El evento debe sumar exactamente 1 reserva en la misma operación
         && evDespues.reservadas == ev.reservadas + 1
         && evDespues.vendidas == ev.vendidas
-        && evDespues.ultimaEntrada == entradaId;
+        && evDespues.ultimaEntrada == entradaId
+        // Y el límite propio del vendedor, si el admin le asignó uno
+        && cupoAlta(d.eventoId);
     }
 
     function confirmarCobro(entradaId) {
@@ -229,7 +316,8 @@ service cloud.firestore {
         && d.liberadaPor == request.auth.uid
         && evDespues.reservadas == ev.reservadas - 1
         && evDespues.vendidas == ev.vendidas
-        && evDespues.ultimaEntrada == entradaId;
+        && evDespues.ultimaEntrada == entradaId
+        && cupoBaja(resource.data.eventoId, resource.data.vendedorId);
     }
 
     function anularEntrada(entradaId) {
@@ -244,6 +332,7 @@ service cloud.firestore {
         && d.anuladaPor == request.auth.uid
         && textoValido(d.motivoAnulacion, 0, 200)
         && evDespues.ultimaEntrada == entradaId
+        && cupoBaja(resource.data.eventoId, resource.data.vendedorId)
         && ( (previo == 'reservada'
                && evDespues.reservadas == ev.reservadas - 1
                && evDespues.vendidas == ev.vendidas)
@@ -288,7 +377,8 @@ service cloud.firestore {
         || (esAdmin() && (liberarReserva(entradaId) || anularEntrada(entradaId)))
         || (esAcceso() && registrarIngreso(entradaId));
 
-      allow delete: if false;
+      // Solo al borrar un evento que ya no está activo.
+      allow delete: if esAdmin() && eventoBorrable(resource.data.eventoId);
     }
 
     // =================================================================
@@ -315,7 +405,8 @@ service cloud.firestore {
         && request.resource.data.vendedorId == get(rutaEntrada(entradaId)).data.vendedorId
         && request.resource.data.vendedorNombre == get(rutaEntrada(entradaId)).data.vendedorNombre;
 
-      allow update, delete: if false;
+      allow update: if false;
+      allow delete: if esAdmin() && eventoBorrable(resource.data.eventoId);
     }
   }
 }
